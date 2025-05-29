@@ -76,7 +76,7 @@ func InitAWS() (*Service, error) {
 	// DynamoDB Config
 	dbClient := dynamodb.NewFromConfig(sdkConfig)
 	tableName := GetEnv("TABLE_NAME")
-	if tableName != "" {
+	if tableName == "" {
 		tableName = "job_application"
 	}
 	exists, err := checkTableExists(dbClient, tableName)
@@ -149,7 +149,7 @@ func GetOrCreateBucket(client *s3.Client) error {
 
 	if bucketName == "" {
 		region := client.Options().Region
-		out, err := client.CreateBucket(context.Background(), &s3.CreateBucketInput{
+		_, err := client.CreateBucket(context.Background(), &s3.CreateBucketInput{
 			Bucket: &defaultBucketName,
 			CreateBucketConfiguration: &s3types.CreateBucketConfiguration{
 				LocationConstraint: s3types.BucketLocationConstraint(region),
@@ -159,7 +159,7 @@ func GetOrCreateBucket(client *s3.Client) error {
 			fmt.Println("Error creating bucket:", err)
 			return err
 		}
-		bucketName = *out.Location
+		bucketName = defaultBucketName
 	}
 	return nil
 }
