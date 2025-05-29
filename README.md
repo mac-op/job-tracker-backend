@@ -79,7 +79,7 @@ Sample request:
 ### `GET /job/:id`: 
 (optional) to get a specific job application by ID
 ### `PUT /job/:id`: 
-(optional) to update a specific job application by ID
+(optional) to update a specific job application by ID 
 ## Setup
 
 1. Ensure you have Go 1.24 installed
