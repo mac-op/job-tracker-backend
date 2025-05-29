@@ -41,17 +41,17 @@ jobs:
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
       
-      - name: Update Lambda Function
+      - name: Update Lambda Function with Code and Config
         run: |
-          if ! aws lambda update-function-code \
+          aws lambda update-function-code \
             --function-name job-application-tracker \
-            --image-uri ${{ steps.build-image.outputs.image }}; then
-            echo "Failed to update Lambda function code"
-            exit 1
-          fi
-      
-      - name: Update Lambda Environment Variables
-        run: |
+            --image-uri ${{ steps.build-image.outputs.image }}
+          
+          # Wait for completion
+          echo "Waiting for Lambda function update to complete..."
+          aws lambda wait function-updated --function-name job-application-tracker
+          
+          # Then update environment
           aws lambda update-function-configuration \
             --function-name job-application-tracker \
             --environment "Variables={BUCKET_NAME=${{ secrets.BUCKET_NAME }},TABLE_NAME=${{ secrets.TABLE_NAME }}}"
