@@ -37,12 +37,12 @@ type DBEntry struct {
 func initConfig() {
 	if Config == nil {
 		var err error
-		if _, err = os.Stat("../.env"); err != nil {
+		if _, err = os.Stat(".env"); err != nil {
 			if os.IsNotExist(err) {
 				return
 			}
 		}
-		Config, err = godotenv.Read("../.env")
+		Config, err = godotenv.Read(".env")
 		if err != nil {
 			panic(err)
 		}
