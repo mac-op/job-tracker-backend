@@ -12,17 +12,17 @@ import (
 )
 
 type JobApplication struct {
-	Title       string `json:"title" dynamodbav:"title"`
-	Description string `json:"description" dynamodbav:"description"`
-	Company     string `json:"company" dynamodbav:"company"`
-	Location    string `json:"location" dynamodbav:"location"`
-	URL         string `json:"url" dynamodbav:"url"`
-	DatePosted  string `json:"date_posted" dynamodbav:"date_posted"`
-	InternalId  string `json:"internal_id" dynamodbav:"internal_id"`
-	Source      string `json:"source" dynamodbav:"source"`
-	Reposted    bool   `json:"reposted" dynamodbav:"reposted"`
-	DateApplied string `json:"date_applied" dynamodbav:"date_applied"`
-	NumFiles    int    `json:"num_files" dynamodbav:"num_files"`
+	Title       string    `json:"title"`
+	Description string    `json:"description"`
+	Company     string    `json:"company"`
+	Location    string    `json:"location"`
+	URL         string    `json:"url"`
+	DatePosted  string    `json:"date_posted"`
+	InternalId  string    `json:"internal_id"`
+	Source      string    `json:"source"`
+	Reposted    bool      `json:"reposted"`
+	DateApplied time.Time `json:"date_applied"`
+	NumFiles    int       `json:"num_files"`
 }
 
 type JobAppRequest struct {
@@ -38,7 +38,7 @@ func uploadPosting(c *gin.Context) {
 	}
 
 	var service *Service
-	if v, exists := c.MustGet("aws").(*Service); exists {
+	if v, exists := c.MustGet("services").(*Service); exists {
 		service = v
 	} else {
 		c.JSON(500, gin.H{"error": "Service not initialized"})
@@ -46,14 +46,10 @@ func uploadPosting(c *gin.Context) {
 		return
 	}
 
-	entry := DBEntry{
-		ID:             uuid.NewString(),
-		Files:          make([]string, len(r.Files)),
-		JobApplication: r.JobApplication,
-	}
+	entry := NewDBEntry(uuid.NewString(), make([]string, len(r.Files)), &r.JobApplication)
 
 	for i, file := range r.Files {
-		content, _ := readFile(file)
+		content, _ := readMultipartFile(file)
 		timestamp := time.Now()
 		extension := filepath.Ext(file.Filename)
 		fileName := strings.TrimSuffix(file.Filename, extension)
@@ -75,15 +71,23 @@ func uploadPosting(c *gin.Context) {
 		}
 		entry.Files[i] = key
 	}
-	e := putApplication(service, entry)
+	e := putApplication(service, &entry)
 	if e != nil {
+		if err := deleteFiles(entry.Files, service.S3, *service.S3Bucket); err != nil {
+			fmt.Println("Error deleting files after failed upload:", err)
+			c.JSON(
+				500,
+				gin.H{"error": "Failed to delete uploaded files: " + err.Error() + " after failing to store application: " + e.Error()},
+			)
+			return
+		}
 		c.JSON(500, gin.H{"error": "Failed to store application: " + e.Error()})
 		return
 	}
 	c.JSON(200, gin.H{"message": "Job application received", "application": entry, "num_files": len(r.Files)})
 }
 
-func readFile(f *multipart.FileHeader) ([]byte, error) {
+func readMultipartFile(f *multipart.FileHeader) ([]byte, error) {
 	content, err := f.Open()
 	if err != nil {
 		return nil, err
@@ -96,4 +100,30 @@ func readFile(f *multipart.FileHeader) ([]byte, error) {
 		return nil, err
 	}
 	return buf, nil
+}
+
+func getApps(c *gin.Context) {
+	var service *Service
+	if v, exists := c.MustGet("services").(*Service); exists {
+		service = v
+	} else {
+		c.JSON(500, gin.H{"error": "Service not initialized"})
+		panic("Service not initialized")
+		return
+	}
+
+	var query FilterQuery
+	if err := c.ShouldBind(&query); err != nil {
+		c.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+
+	fmt.Printf("Received query: %+v\n", query)
+
+	apps, err := QueryApplications(service, &query)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to query applications: " + err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"results": apps})
 }

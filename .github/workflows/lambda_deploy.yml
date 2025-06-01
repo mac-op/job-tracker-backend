@@ -8,50 +8,53 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-      
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v2
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
-      
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-      
-      - name: Create .env file
+
+      - name: Download CockroachDB CA Certificate
         run: |
-          echo "BUCKET_NAME=${{ secrets.BUCKET_NAME }}" > .env
-          echo "TABLE_NAME=${{ secrets.TABLE_NAME }}" >> .env
-      
+          curl --create-dirs -o $HOME/.postgresql/root.crt \
+          "https://cockroachlabs.cloud/clusters/${{ secrets.COCKROACH_CLUSTER_ID }}/cert"
+
       - name: Build, tag, and push image to Amazon ECR
         id: build-image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           ECR_REPOSITORY: job-application-tracker
           IMAGE_TAG: ${{ github.sha }}
+          BUCKET_NAME: ${{ secrets.BUCKET_NAME }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: |
-          # Build a docker container and push it to ECR
-          DOCKER_BUILDKIT=1 docker build --provenance=false --sbom=false -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          DOCKER_BUILDKIT=1 docker build --provenance=false --sbom=false \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
           echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-      
+
       - name: Update Lambda Function with Code and Config
         run: |
           aws lambda update-function-code \
             --function-name job-application-tracker \
             --image-uri ${{ steps.build-image.outputs.image }}
-          
-          # Wait for completion
+
           echo "Waiting for Lambda function update to complete..."
           aws lambda wait function-updated --function-name job-application-tracker
-          
-          # Then update environment
+
           aws lambda update-function-configuration \
             --function-name job-application-tracker \
-            --environment "Variables={BUCKET_NAME=${{ secrets.BUCKET_NAME }},TABLE_NAME=${{ secrets.TABLE_NAME }}}"
+            --environment "Variables={
+              BUCKET_NAME=${{ secrets.BUCKET_NAME }},
+              DATABASE_URL=${{ secrets.DATABASE_URL }},
+            }"
