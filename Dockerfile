@@ -14,8 +14,6 @@ COPY --from=builder /app/main /var/task/
 
 COPY --from=public.ecr.aws/awsguru/aws-lambda-adapter:0.7.0 /lambda-adapter /opt/extensions/lambda-adapter
 
-COPY .env /var/task/
-
 ENV PORT=8080
 ENV AWS_LIE=true
 
