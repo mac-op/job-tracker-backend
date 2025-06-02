@@ -68,6 +68,7 @@ const (
 	equals                = "="
 	like                  = "LIKE"
 	contains              = "CONTAINS"
+	not_contains          = "NOT CONTAINS"
 	not_equals            = "!="
 	less_than             = "<"
 	greater_than          = ">"
@@ -90,18 +91,21 @@ func (f *Filter) BuildFilter() string {
 	if strings.ToUpper(f.Operator) == contains {
 		return fmt.Sprintf("%s LIKE '%%%s%%'", f.Lhs, f.Rhs)
 	}
+	if strings.ToUpper(f.Operator) == not_contains {
+		return fmt.Sprintf("%s NOT LIKE '%%%s%%'", f.Lhs, f.Rhs)
+	}
 
+	if _, e := strconv.Atoi(f.Rhs); e != nil {
+		return fmt.Sprintf("%s %s '%s'", f.Lhs, f.Operator, f.Rhs)
+	}
 	for _, op := range numericOps {
 		if f.Operator != op {
 			continue
 		}
-		if _, e := strconv.Atoi(f.Rhs); e != nil {
-			return fmt.Sprintf("%s %s '%s'", f.Lhs, f.Operator, f.Rhs)
-		} else {
-			return fmt.Sprintf("%s %s %s", f.Lhs, f.Operator, f.Rhs)
-		}
+		return fmt.Sprintf("%s %s %s", f.Lhs, f.Operator, f.Rhs)
 	}
-	return fmt.Sprintf("%s %s '%s'", f.Lhs, f.Operator, f.Rhs)
+	panic("Invalid filter: " + f.Operator + " for " + f.Lhs + " with value " + f.Rhs)
+	//return fmt.Sprintf("%s %s '%s'", f.Lhs, f.Operator, f.Rhs)
 }
 
 type FilterGroup struct {
@@ -324,6 +328,24 @@ func deleteFiles(files []string, s3Client *s3.Client, bucketName string) error {
 		}
 	}
 	return nil
+}
+
+func editApplication(s *Service, id string, app *JobApplication) error {
+	updateFunc := func(tx pgx.Tx) error {
+		_, err := tx.Exec(context.Background(),
+			`UPDATE job_application 
+				SET title = $1, company = $2, description = $3, location = $4, date_posted = $5, 
+					url = $6, internal_id = $7, source = $8, reposted = $9, date_applied = $10 
+				WHERE id = $11`,
+			app.Title, app.Company, app.Description, app.Location, app.DatePosted,
+			app.URL, app.InternalId, app.Source, app.Reposted, app.DateApplied, id)
+		if err != nil {
+			fmt.Println("Error updating application:", err)
+			return err
+		}
+		return nil
+	}
+	return crdbpgx.ExecuteTx(context.Background(), s.db, pgx.TxOptions{}, updateFunc)
 }
 
 func GetOrCreateBucket(client *s3.Client) error {

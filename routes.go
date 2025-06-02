@@ -102,6 +102,23 @@ func readMultipartFile(f *multipart.FileHeader) ([]byte, error) {
 	return buf, nil
 }
 
+func updateApp(context *gin.Context) {
+	var service *Service
+	if v, exists := context.MustGet("services").(*Service); exists {
+		service = v
+	}
+	var app JobApplication
+	if err := context.ShouldBindJSON(&app); err != nil {
+		context.JSON(400, gin.H{"error": err.Error()})
+		return
+	}
+	if e := editApplication(service, context.Param("id"), &app); e != nil {
+		context.JSON(500, gin.H{"error": "Failed to update application: " + e.Error()})
+		return
+	}
+	context.JSON(200, gin.H{"message": "Application updated successfully", "application": app})
+}
+
 func getApps(c *gin.Context) {
 	var service *Service
 	if v, exists := c.MustGet("services").(*Service); exists {
@@ -117,8 +134,6 @@ func getApps(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-
-	fmt.Printf("Received query: %+v\n", query)
 
 	apps, err := QueryApplications(service, &query)
 	if err != nil {
