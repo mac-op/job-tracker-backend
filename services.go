@@ -149,6 +149,7 @@ type FilterQuery struct {
 	SortBy      string       `json:"sort_by"`
 	SortOrder   string       `json:"sort_order"`
 	Limit       int          `json:"limit"`
+	Page        int          `json:"page"`
 }
 
 func (fq *FilterQuery) BuildQuery() string {
@@ -179,9 +180,15 @@ func (fq *FilterQuery) BuildQuery() string {
 			order = "DESC"
 		}
 		result += fmt.Sprintf("ORDER BY %s %s ", fq.SortBy, order)
+	} else {
+		result += "ORDER BY date_applied DESC "
 	}
 	if fq.Limit > 0 {
 		result += fmt.Sprintf("LIMIT %d", fq.Limit)
+	}
+	if fq.Page > 0 && fq.Limit > 0 {
+		offset := (fq.Page - 1) * fq.Limit
+		result += fmt.Sprintf(" OFFSET %d", offset)
 	}
 
 	return result

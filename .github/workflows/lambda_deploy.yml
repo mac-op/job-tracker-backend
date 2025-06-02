@@ -57,4 +57,5 @@ jobs:
             --environment "Variables={
               BUCKET_NAME=${{ secrets.BUCKET_NAME }},
               DATABASE_URL=${{ secrets.DATABASE_URL }},
+              GIN_MODE=release,
             }"
