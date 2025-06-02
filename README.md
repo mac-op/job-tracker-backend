@@ -12,21 +12,12 @@ storage for job applications and their associated files.
 
 - Go & Gin
 - AWS SDK v2 for:
-    - DynamoDB (for job application data)
+    - ~~DynamoDB~~ CockroachDB (for job application data)
     - S3 (for file storage)
-
-## Configuration
-
-The service can be configured using environment variables or a `.env` file:
-
-```dotenv
-BUCKET_NAME=your-s3-bucket-name
-TABLE_NAME=your-dynamodb-table-name # defaults to "job_application"
-``` 
 
 ## API Endpoints
 
-### POST /upload
+### `POST /upload`
 
 Uploads a job application and optional associated files.
 
@@ -74,12 +65,58 @@ Sample request:
     This is the content of the file.
     ------123
   ```
-### `GET /jobs`
-(implementation is optional for the purposes of this extension) to get all job applications
-### `GET /job/:id`: 
-(optional) to get a specific job application by ID
+### `POST /applications`
+Queries job applications based on provided filters and pagination options. Top-level fields:
+
+`where` (object) - A collection of conditions, ie. `filters` or groups of conditions (`subgroups`). Subgroups could have their own subgroups and filters. \
+`sort_by` (string) - Field to sort on (optional).\
+`sort_order` (string) - `asc` or `desc` (optional).\
+`limit` (number) - Maximum number of records (optional).\
+`page` (number) - Page number for pagination (optional).
+
+**Example:**
+```json
+{
+    "where": {
+        "filters": [
+            {
+                "field": "title",      
+                "operator": "contains",       
+                "value": "engineer"
+            }
+        ],
+        "subgroups": [
+            {
+                "filters": [],
+                "subgroups": [],
+                "operator": "or" 
+            }
+        ],
+        "operator": "and"
+    },
+    "sort_by": "company",
+    "sort_order": "asc", 
+    "limit": 10,
+    "page": 1
+}
+```
+
 ### `PUT /job/:id`: 
-(optional) to update a specific job application by ID 
+Update a specific job application by ID 
+```json
+{
+    "title": "Updated Title",
+    "description": "Updated Description",
+    "company": "Updated Company",
+    "location": "Updated Location",
+    "url": "https://updated-url.com",
+    "date_posted": "2023-10-01",
+    "internal_id": "12345",
+    "source": "Updated Source",
+    "reposted": false,
+    "date_applied": "2023-10-02"
+}
+```
 ## Setup
 
 1. Ensure you have Go 1.24 installed
