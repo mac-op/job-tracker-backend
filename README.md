@@ -74,32 +74,53 @@ Queries job applications based on provided filters and pagination options. Top-l
 `limit` (number) - Maximum number of records (optional).\
 `page` (number) - Page number for pagination (optional).
 
-**Example:**
-```json
-{
-    "where": {
-        "filters": [
+- Request
+    ```json
+    {
+        "where": {
+            "filters": [
+                {
+                    "field": "title",
+                    "operator": "contains",
+                    "value": "engineer"
+                }
+            ],
+            "subgroups": [
+                {
+                    "filters": [],
+                    "subgroups": [],
+                    "operator": "or"
+                }
+            ],
+            "operator": "and"
+        },
+        "sort_by": "company",
+        "sort_order": "asc",
+        "limit": 10,
+        "page": 1
+    }
+    ```
+- Response:
+
+    ```json
+    {
+        "results": [
             {
-                "field": "title",      
-                "operator": "contains",       
-                "value": "engineer"
+                "id": "",
+                "title": "",
+                "description": "",
+                "company": "",
+                "url": "",
+                "date_posted": "",
+                "internal_id": "",
+                "source": "",
+                "reposted": false,
+                "date_applied": "2023-06-02T00:00:36.917Z",
+                "files": ["file.txt"]
             }
-        ],
-        "subgroups": [
-            {
-                "filters": [],
-                "subgroups": [],
-                "operator": "or" 
-            }
-        ],
-        "operator": "and"
-    },
-    "sort_by": "company",
-    "sort_order": "asc", 
-    "limit": 10,
-    "page": 1
-}
-```
+        ]
+    }
+    ```
 
 ### `PUT /job/:id`: 
 Update a specific job application by ID 
@@ -132,8 +153,6 @@ The server will start on port 8080 by default.
 ## AWS Requirements
 
 - AWS credentials with permissions for:
-    - DynamoDB: CreateTable, DescribeTable, PutItem
     - S3: CreateBucket, PutObject
-- DynamoDB table with the schema matching the DBEntry struct
 - S3 bucket (will be created automatically if not exists)
-
+- CockroachDB instance for job applications

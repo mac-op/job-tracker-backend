@@ -4,6 +4,11 @@ import (
 	"bytes"
 	"context"
 	_ "database/sql"
+	"github.com/aws/aws-sdk-go-v2/aws"
+	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+
+	//v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
+
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -25,12 +30,13 @@ import (
 var bucketName string = ""
 
 type Service struct {
-	S3       *s3.Client
-	S3Bucket *string
-	db       *pgxpool.Pool
+	S3            *s3.Client
+	S3Bucket      *string
+	PresignClient *s3.PresignClient
+	db            *pgxpool.Pool
 }
 
-type DBEntry struct {
+type ApplicationData struct {
 	ID          string             `json:"id"`
 	Title       string             `json:"title"`
 	Company     string             `json:"company"`
@@ -45,8 +51,8 @@ type DBEntry struct {
 	Files       []string           `json:"files"`
 }
 
-func NewDBEntry(id string, files []string, jobApp *JobApplication) DBEntry {
-	return DBEntry{
+func NewDBEntry(id string, files []string, jobApp *JobApplication) ApplicationData {
+	return ApplicationData{
 		ID:          id,
 		Title:       jobApp.Title,
 		Company:     jobApp.Company,
@@ -199,7 +205,7 @@ type QueryBuilder struct {
 	conn  *pgxpool.Pool
 }
 
-func (q *QueryBuilder) Execute() ([]DBEntry, error) {
+func (q *QueryBuilder) Execute() ([]ApplicationData, error) {
 	if q.query == nil || q.conn == nil {
 		return nil, fmt.Errorf("query or connection not initialized")
 	}
@@ -209,7 +215,7 @@ func (q *QueryBuilder) Execute() ([]DBEntry, error) {
 		return nil, fmt.Errorf("invalid query: no filters or conditions specified")
 	}
 	fmt.Println("Executing query:", sqlQuery)
-	var results []DBEntry
+	var results []ApplicationData
 
 	err := crdbpgx.ExecuteTx(context.Background(), q.conn, pgx.TxOptions{}, func(tx pgx.Tx) error {
 		rows, err := tx.Query(context.Background(), sqlQuery)
@@ -218,7 +224,7 @@ func (q *QueryBuilder) Execute() ([]DBEntry, error) {
 		}
 		defer rows.Close()
 		for rows.Next() {
-			e := DBEntry{}
+			e := ApplicationData{}
 			if sErr := rows.Scan(
 				&e.ID, &e.Title, &e.Company, &e.Description, &e.Location, &e.DatePosted,
 				&e.URL, &e.InternalId, &e.Source, &e.Reposted, &e.DateApplied, &e.Files); sErr != nil {
@@ -234,7 +240,7 @@ func (q *QueryBuilder) Execute() ([]DBEntry, error) {
 	return results, nil
 }
 
-func QueryApplications(s *Service, query *FilterQuery) ([]DBEntry, error) {
+func QueryApplications(s *Service, query *FilterQuery) ([]ApplicationData, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("service or database not initialized")
 	}
@@ -275,9 +281,16 @@ func InitAWS() (*Service, error) {
 		return nil, e
 	}
 
+	presignClient := s3.NewPresignClient(s3Client)
+	if presignClient == nil {
+		fmt.Println("Error creating presign client")
+		return nil, fmt.Errorf("failed to create presign client")
+	}
+
 	return &Service{
-		S3:       s3Client,
-		S3Bucket: &bucketName,
+		S3:            s3Client,
+		S3Bucket:      &bucketName,
+		PresignClient: presignClient,
 	}, nil
 }
 
@@ -302,7 +315,7 @@ func uploadFile(c *s3.Client, bucketName string, key string, body []byte) error 
 	return nil
 }
 
-func putApplication(s *Service, e *DBEntry) error {
+func putApplication(s *Service, e *ApplicationData) error {
 	insertFunc := func(tx pgx.Tx) error {
 		_, err := tx.Exec(context.Background(),
 			`INSERT INTO job_application 
@@ -324,17 +337,17 @@ func putApplication(s *Service, e *DBEntry) error {
 }
 
 func deleteFiles(files []string, s3Client *s3.Client, bucketName string) error {
-	for _, file := range files {
-		_, err := s3Client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
+	var err error = nil
+	for _, name := range files {
+		_, err = s3Client.DeleteObject(context.Background(), &s3.DeleteObjectInput{
 			Bucket: &bucketName,
-			Key:    &file,
+			Key:    &name,
 		})
 		if err != nil {
 			fmt.Println("Error deleting file:", err)
-			return err
 		}
 	}
-	return nil
+	return err
 }
 
 func editApplication(s *Service, id string, app *JobApplication) error {
@@ -376,4 +389,32 @@ func GetOrCreateBucket(client *s3.Client) error {
 		bucketName = defaultBucketName
 	}
 	return nil
+}
+
+func getFileURL(s *Service, fileName string) (string, error) {
+	if s == nil || s.PresignClient == nil || s.S3Bucket == nil {
+		return "", fmt.Errorf("service or presign client not initialized")
+	}
+
+	var req *v4.PresignedHTTPRequest
+	var err error
+	if !strings.HasSuffix(fileName, ".pdf") {
+		req, err = s.PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{
+			Bucket:                     s.S3Bucket,
+			Key:                        &fileName,
+			ResponseContentDisposition: aws.String("inline"),
+		})
+	} else {
+		req, err = s.PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{
+			Bucket:                     s.S3Bucket,
+			Key:                        &fileName,
+			ResponseContentType:        aws.String("application/pdf"),
+			ResponseContentDisposition: aws.String("inline"),
+		})
+	}
+	if err != nil {
+		fmt.Println("Error presigning get object:", err)
+		return "", err
+	}
+	return req.URL, nil
 }

@@ -30,6 +30,38 @@ type JobAppRequest struct {
 	Files          []*multipart.FileHeader `form:"files"`
 }
 
+func getFileLink(c *gin.Context) {
+	var service *Service
+	if v, exists := c.MustGet("services").(*Service); exists {
+		service = v
+	} else {
+		c.JSON(500, gin.H{"error": "Service not initialized"})
+		panic("Service not initialized")
+		return
+	}
+
+	id := c.Param("id")
+	fileName := c.Param("file_name")
+	if fileName == "" {
+		c.JSON(400, gin.H{"error": "File name is required"})
+		return
+	}
+	sep := strings.LastIndex(fileName, "_")
+	dot := strings.LastIndex(fileName, ".")
+	if id != fileName[sep+1:dot] {
+		c.JSON(400, gin.H{"error": "File ID does not match the requested ID"})
+		return
+	}
+
+	url, err := getFileURL(service, fileName)
+	if err != nil {
+		c.JSON(500, gin.H{"error": "Failed to get file URL: " + err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"url": url})
+}
+
 func uploadPosting(c *gin.Context) {
 	var r JobAppRequest
 	if err := c.ShouldBindWith(&r, binding.FormMultipart); err != nil {

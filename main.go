@@ -16,6 +16,7 @@ func setUp(s *Service) *gin.Engine {
 	engine.POST("/upload", uploadPosting)
 	engine.POST("/applications", getApps)
 	engine.PATCH("/applications/:id", updateApp)
+	engine.GET("/files/:id/:file_name", getFileLink)
 
 	return engine
 }
