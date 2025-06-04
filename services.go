@@ -3,12 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
-	_ "database/sql"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-
-	//v4 "github.com/aws/aws-sdk-go-v2/aws/signer/v4"
-
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -80,6 +76,8 @@ const (
 	greater_than          = ">"
 	less_than_or_equal    = "<="
 	greater_than_or_equal = ">="
+	is_empty              = "IS_EMPTY"
+	is_not_empty          = "IS_NOT_EMPTY"
 )
 
 var numericOps = []string{equals, not_equals, less_than, greater_than, less_than_or_equal, greater_than_or_equal}
@@ -91,14 +89,22 @@ type Filter struct {
 }
 
 func (f *Filter) BuildFilter() string {
-	if f == nil || f.Lhs == "" || f.Operator == "" || f.Rhs == "" {
+	if f == nil || f.Lhs == "" || f.Operator == "" {
 		return ""
 	}
-	if strings.ToUpper(f.Operator) == contains {
+
+	upper := strings.ToUpper(f.Operator)
+	if upper == contains {
 		return fmt.Sprintf("%s LIKE '%%%s%%'", f.Lhs, f.Rhs)
 	}
-	if strings.ToUpper(f.Operator) == not_contains {
+	if upper == not_contains {
 		return fmt.Sprintf("%s NOT LIKE '%%%s%%'", f.Lhs, f.Rhs)
+	}
+	if upper == is_empty {
+		return fmt.Sprintf("%s IS NULL", f.Lhs)
+	}
+	if upper == is_not_empty {
+		return fmt.Sprintf("%s IS NOT NULL", f.Lhs)
 	}
 
 	if _, e := strconv.Atoi(f.Rhs); e != nil {
@@ -402,6 +408,7 @@ func getFileURL(s *Service, fileName string) (string, error) {
 		req, err = s.PresignClient.PresignGetObject(context.Background(), &s3.GetObjectInput{
 			Bucket:                     s.S3Bucket,
 			Key:                        &fileName,
+			ResponseContentType:        aws.String("text/plain"),
 			ResponseContentDisposition: aws.String("inline"),
 		})
 	} else {
