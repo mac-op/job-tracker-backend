@@ -70,7 +70,7 @@ const (
 	equals                = "="
 	like                  = "LIKE"
 	contains              = "CONTAINS"
-	not_contains          = "NOT CONTAINS"
+	not_contains          = "NOT_CONTAINS"
 	not_equals            = "!="
 	less_than             = "<"
 	greater_than          = ">"
