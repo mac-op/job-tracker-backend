@@ -55,7 +55,8 @@ func getFileLink(c *gin.Context) {
 
 	url, err := getFileURL(service, fileName)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to get file URL: " + err.Error()})
+		fmt.Println("Failed to get file URL: ", err.Error())
+		c.JSON(500, gin.H{"error": "Failed to get file URL"})
 		return
 	}
 
@@ -98,22 +99,24 @@ func uploadPosting(c *gin.Context) {
 
 		err := uploadFile(service.S3, *service.S3Bucket, key, content)
 		if err != nil {
-			c.JSON(500, gin.H{"error": "Failed to upload file: " + err.Error()})
+			fmt.Println("Failed to upload file: ", err.Error())
+			c.JSON(500, gin.H{"error": "Failed to upload file"})
 			return
 		}
 		entry.Files[i] = key
 	}
 	e := putApplication(service, &entry)
 	if e != nil {
+		fmt.Println("Failed to store application: ", e.Error())
 		if err := deleteFiles(entry.Files, service.S3, *service.S3Bucket); err != nil {
 			fmt.Println("Error deleting files after failed upload:", err)
 			c.JSON(
 				500,
-				gin.H{"error": "Failed to delete uploaded files: " + err.Error() + " after failing to store application: " + e.Error()},
+				gin.H{"error": "Failed to delete uploaded files after failing to store application "},
 			)
 			return
 		}
-		c.JSON(500, gin.H{"error": "Failed to store application: " + e.Error()})
+		c.JSON(500, gin.H{"error": "Failed to store application"})
 		return
 	}
 	c.JSON(200, gin.H{"message": "Job application received", "application": entry, "num_files": len(r.Files)})
@@ -141,11 +144,13 @@ func updateApp(context *gin.Context) {
 	}
 	var app JobApplication
 	if err := context.ShouldBindJSON(&app); err != nil {
-		context.JSON(400, gin.H{"error": err.Error()})
+		fmt.Println("Failed to bind JSON: ", err.Error(), " for data: ", context.Request.Body)
+		context.JSON(400, gin.H{"error": "Invalid request data"})
 		return
 	}
 	if e := editApplication(service, context.Param("id"), &app); e != nil {
-		context.JSON(500, gin.H{"error": "Failed to update application: " + e.Error()})
+		fmt.Println("Failed to update application: ", e.Error())
+		context.JSON(500, gin.H{"error": "Failed to update application"})
 		return
 	}
 	context.JSON(200, gin.H{"message": "Application updated successfully", "application": app})
@@ -168,8 +173,10 @@ func getApps(c *gin.Context) {
 	}
 
 	apps, err := QueryApplications(service, &query)
+
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Failed to query applications: " + err.Error()})
+		fmt.Println("Failed to query applications: ", err.Error())
+		c.JSON(500, gin.H{"error": "Failed to query applications"})
 		return
 	}
 	c.JSON(200, gin.H{"results": apps})

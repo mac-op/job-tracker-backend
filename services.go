@@ -165,19 +165,7 @@ type FilterQuery struct {
 }
 
 func (fq *FilterQuery) BuildQuery() string {
-	result := `SELECT 
-    	id,
-    	title,
-    	company,
-    	description,
-    	location,
-    	date_posted,
-    	url,
-    	internal_id,
-    	source,
-    	reposted,
-    	date_applied,
-    	files
+	result := `SELECT id, title, company, description, location, date_posted, url, internal_id, source, reposted, date_applied, files
     FROM job_application `
 
 	if fq.FilterGroup != nil {
@@ -218,7 +206,7 @@ func (q *QueryBuilder) Execute() ([]ApplicationData, error) {
 
 	sqlQuery := q.query.BuildQuery()
 	if sqlQuery == "" {
-		return nil, fmt.Errorf("invalid query: no filters or conditions specified")
+		return nil, fmt.Errorf("invalid query")
 	}
 	fmt.Println("Executing query:", sqlQuery)
 	var results []ApplicationData
