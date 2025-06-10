@@ -95,10 +95,10 @@ func (f *Filter) BuildFilter() string {
 
 	upper := strings.ToUpper(f.Operator)
 	if upper == contains {
-		return fmt.Sprintf("%s LIKE '%%%s%%'", f.Lhs, f.Rhs)
+		return fmt.Sprintf("%s ILIKE '%%%s%%'", f.Lhs, f.Rhs)
 	}
 	if upper == not_contains {
-		return fmt.Sprintf("%s NOT LIKE '%%%s%%'", f.Lhs, f.Rhs)
+		return fmt.Sprintf("%s NOT ILIKE '%%%s%%'", f.Lhs, f.Rhs)
 	}
 	if upper == is_empty {
 		return fmt.Sprintf("%s IS NULL", f.Lhs)
